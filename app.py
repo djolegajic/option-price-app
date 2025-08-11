@@ -20,15 +20,13 @@ def get_option_price(symbol: str, expiry: str, cp: str, strike: float):
         row = match.iloc[0]
         return {
             'symbol': symbol,
+            'expiry': expiry,
             'type': cp.lower(),
             'strike': row['strike'],
-            'expiry': expiry,
             'lastPrice': row['lastPrice'],
             'bid': row['bid'],
             'ask': row['ask'],
-            'impliedVolatility': row['impliedVolatility'],
-            'volume': row['volume'],
-            'openInterest': row['openInterest']
+
         }
 
     except Exception as e:
@@ -61,29 +59,23 @@ if uploaded_file:
                 else:
                     results.append({
                         'symbol': symbol,
+                        'expiry': expiry,
                         'type': cp,
                         'strike': strike,
-                        'expiry': expiry,
                         'lastPrice': None,
                         'bid': None,
                         'ask': None,
-                        'impliedVolatility': None,
-                        'volume': None,
-                        'openInterest': None,
                         'status': '⚠️ No match or invalid input'
                     })
             except Exception as e:
                 results.append({
                     'symbol': symbol,
+                    'expiry': expiry,
                     'type': cp,
                     'strike': row.get("strike"),
-                    'expiry': expiry,
                     'lastPrice': None,
                     'bid': None,
                     'ask': None,
-                    'impliedVolatility': None,
-                    'volume': None,
-                    'openInterest': None,
                     'status': f'❌ Error: {str(e)}'
                 })
 
@@ -98,3 +90,4 @@ if uploaded_file:
         file_name='options_with_prices.csv',
         mime='text/csv',
     )
+
