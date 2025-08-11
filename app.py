@@ -36,11 +36,24 @@ def get_option_price(symbol: str, expiry: str, cp: str, strike: float):
 st.title("📈 Option Price Fetcher")
 st.write("Upload a CSV with columns: `symbol`, `expiry` (YYYY-MM-DD), `cp` (call/put), and `strike`")
 
-uploaded_file = st.file_uploader("Upload your options_input.csv file", type="csv")
+uploaded_file = st.file_uploader("Upload your options file", type=["csv", "xlsx"])
 
 if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    df.columns = df.columns.str.strip()  # clean headers
+    # Read CSV or Excel automatically
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
+    else:
+        df = pd.read_excel(uploaded_file)
+
+    df.columns = df.columns.str.strip()  # Clean headers
+
+    # Convert expiry column to proper YYYY-MM-DD string
+    if pd.api.types.is_numeric_dtype(df["expiry"]):
+        # Excel serial number to datetime
+        df["expiry"] = pd.to_datetime(df["expiry"], unit='d', origin='1899-12-30').dt.strftime('%Y-%m-%d')
+    else:
+        # Already a date string or datetime
+        df["expiry"] = pd.to_datetime(df["expiry"]).dt.strftime('%Y-%m-%d')
 
     results = []
 
@@ -90,4 +103,5 @@ if uploaded_file:
         file_name='options_with_prices.csv',
         mime='text/csv',
     )
+
 
