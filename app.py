@@ -34,7 +34,7 @@ def get_option_price(symbol: str, expiry: str, cp: str, strike: float):
 
 # Streamlit UI
 st.title("📈 Option Price Fetcher")
-st.write("Upload a CSV with columns: `symbol`, `expiry` (YYYY-MM-DD), `cp` (call/put), and `strike`")
+st.write("Upload a CSV or Excel file with columns: `symbol`, `expiry` (date or Excel date), `cp` (call/put), and `strike`")
 
 uploaded_file = st.file_uploader("Upload your options file", type=["csv", "xlsx"])
 
@@ -103,5 +103,6 @@ if uploaded_file:
         file_name='options_with_prices.csv',
         mime='text/csv',
     )
+
 
 
