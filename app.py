@@ -2,107 +2,124 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 
-def get_option_price(symbol: str, expiry: str, cp: str, strike: float):
-    try:
-        ticker = yf.Ticker(symbol)
-        expiries = ticker.options
+st.set_page_config(page_title="Option Price Fetcher", layout="centered")
+st.title("📈 Option Price Fetcher")
+st.write("Upload a CSV or Excel with columns (in order): **Simbol / istek / strike / vrsta**")
 
+# --------- Core helper ---------
+def get_option_price(symbol: str, expiry: str, cp: str, strike: float):
+    """
+    Returns dict with last, bid, ask for a single option, or None if no match.
+    """
+    try:
+        t = yf.Ticker(symbol)
+        expiries = t.options or []
         if expiry not in expiries:
             return None
 
-        chain = ticker.option_chain(expiry)
-        df = chain.calls if cp.lower() == 'call' else chain.puts
+        chain = t.option_chain(expiry)
+        # Normalize cp
+        cp_norm = str(cp).strip().lower()
+        # accept a few shorthands
+        if cp_norm in ("c", "call", "kup", "kupovina"):
+            df = chain.calls
+        else:
+            df = chain.puts
 
-        match = df[df['strike'] == strike]
+        match = df[df["strike"] == float(strike)]
         if match.empty:
             return None
 
         row = match.iloc[0]
         return {
-            'symbol': symbol,
-            'expiry': expiry,
-            'type': cp.lower(),
-            'strike': row['strike'],
-            'lastPrice': row['lastPrice'],
-            'bid': row['bid'],
-            'ask': row['ask'],
-
+            "last": row.get("lastPrice"),
+            "bid": row.get("bid"),
+            "ask": row.get("ask"),
         }
-
-    except Exception as e:
+    except Exception:
         return None
 
-# Streamlit UI
-st.title("📈 Option Price Fetcher")
-st.write("Upload a CSV or Excel file with columns: `symbol`, `expiry` (date or Excel date), `cp` (call/put), and `strike`")
+# --------- Upload ---------
+uploaded = st.file_uploader("Upload file", type=["csv", "xlsx"])
 
-uploaded_file = st.file_uploader("Upload your options file", type=["csv", "xlsx"])
-
-if uploaded_file:
-    # Read CSV or Excel automatically
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file)
+if uploaded:
+    # Read file
+    if uploaded.name.lower().endswith(".csv"):
+        df_in = pd.read_csv(uploaded)
     else:
-        df = pd.read_excel(uploaded_file)
+        df_in = pd.read_excel(uploaded)
 
-    df.columns = df.columns.str.strip()  # Clean headers
+    # Clean headers and enforce expected names
+    df_in.columns = df_in.columns.str.strip()
+    # We accept any case but expect these logical names:
+    rename_map = {}
+    for c in df_in.columns:
+        lc = c.strip().lower()
+        if lc == "simbol":
+            rename_map[c] = "Simbol"
+        elif lc == "istek":
+            rename_map[c] = "istek"
+        elif lc == "strike":
+            rename_map[c] = "strike"
+        elif lc == "vrsta":
+            rename_map[c] = "vrsta"
+    df_in = df_in.rename(columns=rename_map)
 
-    # Convert expiry column to proper YYYY-MM-DD string
-    if pd.api.types.is_numeric_dtype(df["expiry"]):
-        # Excel serial number to datetime
-        df["expiry"] = pd.to_datetime(df["expiry"], unit='d', origin='1899-12-30').dt.strftime('%Y-%m-%d')
+    # Minimal validation
+    required = ["Simbol", "istek", "strike", "vrsta"]
+    missing = [c for c in required if c not in df_in.columns]
+    if missing:
+        st.error(f"Nedostaju kolone: {missing}. Očekivano: {required}")
+        st.stop()
+
+    # Reorder and trim to only expected input cols
+    df_in = df_in[required].copy()
+
+    # Convert 'istek' to 'YYYY-MM-DD'
+    # - if Excel serial (numeric), convert from 1899-12-30 origin
+    # - else parse as date string
+    if pd.api.types.is_numeric_dtype(df_in["istek"]):
+        df_in["istek"] = pd.to_datetime(
+            df_in["istek"], unit="d", origin="1899-12-30"
+        ).dt.strftime("%Y-%m-%d")
     else:
-        # Already a date string or datetime
-        df["expiry"] = pd.to_datetime(df["expiry"]).dt.strftime('%Y-%m-%d')
+        df_in["istek"] = pd.to_datetime(df_in["istek"]).dt.strftime("%Y-%m-%d")
 
-    results = []
+    # Ensure strike is float
+    df_in["strike"] = pd.to_numeric(df_in["strike"], errors="coerce")
 
-    with st.spinner("Fetching option prices..."):
-        for _, row in df.iterrows():
-            symbol = row["symbol"]
-            expiry = row["expiry"]
-            cp = row["cp"]
-            try:
-                strike = float(row["strike"])
-                result = get_option_price(symbol, expiry, cp, strike)
+    # --------- Fetch prices ---------
+    out_rows = []
+    with st.spinner("Preuzimanje cena opcija..."):
+        for _, r in df_in.iterrows():
+            symbol = str(r["Simbol"]).strip()
+            expiry = str(r["istek"]).strip()
+            cp = str(r["vrsta"]).strip()
+            strike = float(r["strike"]) if pd.notnull(r["strike"]) else None
 
-                if result:
-                    result["status"] = "✅ Success"
-                    results.append(result)
-                else:
-                    results.append({
-                        'symbol': symbol,
-                        'expiry': expiry,
-                        'type': cp,
-                        'strike': strike,
-                        'lastPrice': None,
-                        'bid': None,
-                        'ask': None,
-                        'status': '⚠️ No match or invalid input'
-                    })
-            except Exception as e:
-                results.append({
-                    'symbol': symbol,
-                    'expiry': expiry,
-                    'type': cp,
-                    'strike': row.get("strike"),
-                    'lastPrice': None,
-                    'bid': None,
-                    'ask': None,
-                    'status': f'❌ Error: {str(e)}'
-                })
+            quote = None
+            if symbol and expiry and strike is not None and cp:
+                quote = get_option_price(symbol, expiry, cp, strike)
 
-    output_df = pd.DataFrame(results)
-    st.success("✅ Done! Preview and download below.")
-    st.dataframe(output_df)
+            out_rows.append({
+                "Simbol": symbol,
+                "istek": expiry,
+                "strike": strike,
+                "vrsta": cp,
+                "last": quote["last"] if quote else None,
+                "bid": quote["bid"] if quote else None,
+                "ask": quote["ask"] if quote else None,
+            })
 
-    csv = output_df.to_csv(index=False).encode('utf-8')
+    df_out = pd.DataFrame(out_rows, columns=["Simbol","istek","strike","vrsta","last","bid","ask"])
+
+    st.success("✅ Gotovo. Rezultat:")
+    st.dataframe(df_out, use_container_width=True)
+
+    csv_bytes = df_out.to_csv(index=False).encode("utf-8")
     st.download_button(
-        label="📥 Download CSV with Prices",
-        data=csv,
-        file_name='options_with_prices.csv',
-        mime='text/csv',
+        label="📥 Preuzmi CSV",
+        data=csv_bytes,
+        file_name="options_with_prices.csv",
+        mime="text/csv",
     )
-
-
-
