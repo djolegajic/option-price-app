@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 
-st.set_page_config(page_title="Option Price Fetcher", layout="centered")
-st.title("📈 Option Price Fetcher")
-st.write("Upload a CSV or Excel with columns (in order): **Simbol / istek / strike / vrsta**")
+st.set_page_config(page_title="Pronalazač cena opcija", layout="centered")
+st.title("📈 Pronalazač cena opcija")
+st.write("Otpremite CSV ili Excel fajl sa kolonama (redosled): **Simbol / istek / strike / vrsta**")
+
 
 # --------- Core helper ---------
 def get_option_price(symbol: str, expiry: str, cp: str, strike: float):
@@ -123,3 +124,4 @@ if uploaded:
         file_name="options_with_prices.csv",
         mime="text/csv",
     )
+
