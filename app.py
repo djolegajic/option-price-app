@@ -119,9 +119,10 @@ if uploaded:
 
     csv_bytes = df_out.to_csv(index=False).encode("utf-8")
     st.download_button(
-        label="📥 Preuzmi CSV",
+        label="📥 Preuzmi cene opcija",
         data=csv_bytes,
         file_name="options_with_prices.csv",
         mime="text/csv",
     )
+
 
